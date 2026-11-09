@@ -1,7 +1,6 @@
 #include <ESP8266WiFi.h>
 #include <DNSServer.h>
 #include <lwip/napt.h>            // 用于开启 NAT 转发
-#include <lwip/priv/tcp_priv.h>   // 用于开启 TCP Keep-Alive
 
 // ================= 配置区 =================
 // 1. 你家路由器的 WiFi 信息（ESP8266 要连这个）
@@ -48,11 +47,6 @@ void setup() {
   // 5. 开启 NAT 转发，让连热点的设备能访问公网
   ip_napt_enable(WiFi.localIP(), 1);
   Serial.println("NAPT enabled");
-
-  // 6. 开启 TCP Keep-Alive（每 60 秒发一次心跳包，防止 NAT 连接被主路由掐断）
-  // 注意：此项在部分老版本 ESP8266 核心库中可能编译报错，若报错请直接删除这一行
-  tcp_keepalive_enable_all(60);
-  Serial.println("TCP Keep-Alive enabled");
 
   Serial.println("--- System Ready! ---");
 }
