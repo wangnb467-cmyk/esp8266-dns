@@ -1,40 +1,63 @@
 #include <ESP8266WiFi.h>
 #include <DNSServer.h>
-#include <lwip/napt.h>
+#include <lwip/napt.h>            // 用于开启 NAT 转发
+#include <lwip/priv/tcp_priv.h>   // 用于开启 TCP Keep-Alive
 
-const char* homeSSID = "CMCC-2uhz";
-const char* homePASS = "11111111";
+// ================= 配置区 =================
+// 1. 你家路由器的 WiFi 信息（ESP8266 要连这个）
+const char* homeSSID = "CMCC-2uhz"; 
+const char* homePASS = "11111111"; 
+
+// 2. ESP8266 自己发出的热点信息（手机连这个）
 const char* apSSID   = "MyDNS_AP";
 const char* apPASS   = "12345678";
 
+// 3. 劫持目标
 const byte DNS_PORT = 53;
-IPAddress hijackIP(38, 147, 187, 122);  // 所有域名都解析到这里
+IPAddress hijackIP(38, 147, 187, 122);  // 所有域名都会被解析到这个 IP
+// ==========================================
 
 DNSServer dnsServer;
 
 void setup() {
   Serial.begin(115200);
-  WiFi.mode(WIFI_AP_STA);
+  delay(10);
+  Serial.println("\n\n--- ESP8266 DNS Hijack Booting ---");
 
-  // 1. 开热点
+  // 1. 开启 AP+STA 混合模式
+  WiFi.mode(WIFI_AP_STA);
+  
+  // 2. 启动热点
   WiFi.softAP(apSSID, apPASS);
   Serial.print("AP IP: ");
   Serial.println(WiFi.softAPIP());
 
-  // 2. 连家里WiFi
+  // 3. 连接你家 WiFi
   WiFi.begin(homeSSID, homePASS);
-  while (WiFi.status() != WL_CONNECTED) { delay(500); Serial.print("."); }
+  Serial.print("Connecting to home WiFi");
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
   Serial.println("\nSTA IP: " + WiFi.localIP().toString());
 
-  // 3. 核心：劫持所有域名 -> hijackIP
+  // 4. 核心：劫持所有域名 -> hijackIP
   dnsServer.start(DNS_PORT, "*", hijackIP);
   Serial.println("DNS hijack -> " + hijackIP.toString());
 
-  // 4. 开NAT，让连热点的设备能真正访问到 38.147.187.122
+  // 5. 开启 NAT 转发，让连热点的设备能访问公网
   ip_napt_enable(WiFi.localIP(), 1);
   Serial.println("NAPT enabled");
+
+  // 6. 开启 TCP Keep-Alive（每 60 秒发一次心跳包，防止 NAT 连接被主路由掐断）
+  // 注意：此项在部分老版本 ESP8266 核心库中可能编译报错，若报错请直接删除这一行
+  tcp_keepalive_enable_all(60);
+  Serial.println("TCP Keep-Alive enabled");
+
+  Serial.println("--- System Ready! ---");
 }
 
 void loop() {
+  // 必须持续处理 DNS 请求
   dnsServer.processNextRequest();
 }
